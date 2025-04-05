@@ -46,16 +46,39 @@ yarn build
 Карточка
 
 ```
-interface ICard {
+interface ICardBase {
   _id: string;
   title: string;
   price: number;
-  category: string;
+  category: Category;
   description: string;
   image: string;
-  isCompact: boolean;
-  isFull: boolean;
 }
+```
+
+Модификаторы для отображения разных видов карточки
+
+```
+interface ICard extends ICardBase {
+  isCompact?: boolean;
+  isFull?: boolean;
+}
+```
+
+Данные карточки для отображения в галерее
+
+```
+type TCardGallery = Pick<ICardBase, '_id' | 'category' | 'title' | 'price' | 'image'>;
+```
+
+Данные карочки для отображения в корзине
+```
+type TCardCompact = Pick<ICardBase, '_id' | 'title' | 'price'>;
+```
+
+Данные карточки для просмотра в большом окне
+```
+type TCardFull = ICardBase & { 'isFull': true };
 ```
 
 
@@ -63,10 +86,32 @@ interface ICard {
 
 ```
 interface IUser {
-  paymentMethod: Payment;
+  paymentMethod: PaymentMethod;
   address: string;
   phoneNumber: string;
   email: string;
+}
+```
+
+Информация о корзине
+
+```
+interface IBasket {
+  items: TCardCompact[];
+  totalPrice: number;
+}
+```
+
+Информация о заказе
+
+```
+interface IOrder {
+  payment: PaymentMethod;
+  email: string;
+  phone: string;
+  address: string;
+  total: number;
+  items: string[];
 }
 ```
 
@@ -80,21 +125,28 @@ interface ICardsData {
 }
 ```
 
-Данные карточки для отображения в галерее
+Интерфейс для работы с корзиной
 
 ```
-type TCardGallery = Pick<ICard, '_id' | 'category' | 'title' | 'price' | 'image'>;
+interface IBasketData {
+  getBasket(): IBasket;
+  setBasket(card: ICard): void;
+  deleteBasket(cardId: string, payload?: () => void): void;
+  updateBasket(cards: TCardCompact[], payload?: () => void): void;
+  getTotalBasket(): number;
+  clearBasket(): void;
+}
 ```
 
-Данные карочки для отображения в корзине
+Интерфейс для работы с данными пользователя
+
 ```
-type TCardCompact = Pick<ICard, '_id' | 'title' | 'price' | 'isCompact'>;
+interface IUserData {
+  setUserInfo(userData: IUser): void;
+  checkUserValidation(data: Record<keyof IUser, string>): boolean;
+}
 ```
 
-Данные карточки для просмотра в большом окне
-```
-type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'description' | 'image' | 'isFull'>;
-```
 
 ## Описание проекта
 
@@ -107,7 +159,7 @@ type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'descripti
 
   1. Просмотр галереи товаров (mainPage)
   2. Просмотр конкретного товара и добавление его в корзину (ModalFullview)
-  3. Оформление заказа (BasketModal, ModalWithForm, ModalSuccess)
+  3. Оформление заказа (BasketModal, UserInfoModal, ModalSuccess)
 
 Так как модальные окна в проекте однотипные, то их общая логика и структура вынесена в класс Modal. Все модальные окна наследуются от него и переопределяют методы для своих нужд.
 
@@ -146,7 +198,7 @@ type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'descripti
 
 #### Класс CardsData
 
-Класс управляет данными карточек, полученными с API. В конструктор передаётся экземпляр EventEmitter.
+Класс управляет данными карточек. Отвечает за хранение, выбор и подготовку данных для отображения. В конструктор передаётся экземпляр EventEmitter.
 Поля:
   - _cards: ICard[] - массив карточек. Не изменяется напрямую.
   - _preview: string | null - id карточки для отображения в модальном окне.
@@ -163,13 +215,11 @@ type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'descripti
 
 Поля:
   - basketCards: TCardCompact[] | null - массив карточек корзины.
-  - totalBasket: number - итоговая сумма заказа.
 
 Методы для работы с данными в корзине:
   - getBasket(): TCardCompact[] - возвращает текущие карточки корзины.
   - setBasket(card: ICard): void - добавляет карточку в корзину.
   - deleteBasket(cardId: string, payload: Function | null): void - удаляет карточку и, если передан callback, вызывает его.
-  - updateBasket(basketCards: TCardCompact[], payload: Function | null): void - заменяет содержимое корзины, опционально вызывает callback.
   - getTotalBasket(): number - считает сумму корзины.
   - Сеттеры и геттеры — для работы с полями класса.
 
@@ -196,48 +246,80 @@ type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'descripti
 
 #### Класс Modal
 
-Управляет модальным окном. Поддерживает открытие/закрытие, обработку нажатия Esc и кликов по оверлею.
-
-  - constructor(template: string, events: IEvents) - конструктор принимает шаблон, по которому в разметке страницы будет идентифицировано модальное окно и экземпляр класса `EventEmitter` для возможности инициации событий. 
+Компонент, отвечающий за отображение модального окна. Имеет контейнер с кнопкой закрытия и областью контента (`.modal__content`), куда вставляется внешний компонент: форма, карточка, корзина и т.п.
 
 Поля:
-  - modal: HTMLTemplateElement - шаблон модального окна.
+  - modal: HTMLElement - элемент модального окна.
   - events: IEvents - брокер событий.
 
+#### Встраиваемые компоненты (контент модального окна)
+
+Следующие компоненты не наследуют `Modal`, но могут быть встроены внутрь модального окна через `Modal.open()`:
+
+  - `UserInfoModal` — формы ввода пользовательских данных.
+  - `ModalSuccess` — сообщение об успешной оплате.
+  - `ModalFullview` — карточка товара в увеличенном формате.
+  - `BasketModal` — содержимое корзины.
+
+#### Basket Modal
+
+BasketView — это компонент, который отвечает за отображение содержимого корзины пользователя. Он отображает список добавленных товаров по порядковым номерам, общую стоимость и предоставляет возможность удалять товары из корзины.
+
+Поля:
+  - containerElement: HTMLElement — DOM-элемент, в который вставляются карточки товаров корзины.
+  - basketData: IBasketData — объект, содержащий данные о корзине (получение, обновление и удаление товаров из корзины).
+  - totalElement: HTMLElement — DOM-элемент, отображающий общую стоимость корзины
+
 Методы:
-  - open(): void — открывает модальное окно.
-  - close(): void — закрывает модальное окно.
+  - render(): void - метод отвечает за рендеринг всех товаров, которые находятся в корзине. Для каждого товара будет создан отдельный элемент, который будет вставлен в containerElement. Также обновляется общая стоимость корзины в totalElement.
+  - addCard(cardElement: HTMLElement): void - Добавляет товар в контейнер корзины, создавая новый DOM-элемент для отображения карточки.
+  - removeCard(cardId: string): void - Удаляет товар из корзины по его id. После удаления обновляется DOM и пересчитывается общая стоимость корзины.
+  - updateTotalPrice(): void - Пересчитывает общую стоимость корзины, вызывая метод из класса BasketData, и обновляет отображение в totalElement.
+  - clearBasket(): void - Очищает корзину, удаляя все элементы и сбрасывая общую стоимость. Также вызывает соответствующие методы из BasketData для очистки данных корзины.
 
-#### Класс ModalWithForm
+#### Класс UserInfoModal
 
-Расширяет Modal, реализует форму с вводом данных.
+Компонент модального окна с формой. Используется для отображения форм, в которых пользователь вводит информацию (например, адрес, email и пр.). Компонент ищет форму по имени (formName) и собирает все поля ввода внутри неё.
 
 Поля: 
-  - submitButton: HTMLButtonElement - кнопка подтверждения.
-  - _form: HTMLFormElement - HTML-элемент формы.
-  - formName: string - значение атрибута name формы.
-  - inputs: NodeListOf <HTMLInputElement> - список полей ввода.
+  - submitButton: HTMLButtonElement - кнопка подтверждения отправки формы и переход к следующему шагу.
+  - _form: HTMLFormElement - HTML-элемент формы, найденной по имени.
+  - formName: string - значение атрибута name формы для поиска нужного DOM-элемента.
+  - inputs: NodeListOf <HTMLInputElement> - список полей ввода внутри формы.
 
 Методы:
   - setValid(isValid: boolean): void - активирует/деактивирует кнопку подтверждения.
   - getInputValues(): Record<string, string> - возвращает данные из полей формы.
-  - close(): void - расширяет родительский метод, закрывает форму и сбрасывает её состояние.
+  - close(): void - акрывает модальное окно и сбрасывает состояние формы.
   - get form: HTMLElement - возвращает элемент формы.
+
+#### Классы-наследники
+
+  1.  Класс PaymentModal  
+PaymentModal — это класс для модалки, где пользователь выбирает метод оплаты и вводит свой адрес.  
+Особенности:
+  - Обрабатывает выбор метода оплаты.
+  - Валидирует введенный адрес.
+
+  2. Класс ContactInfoModal  
+ContactInfoModal — это класс для модалки, где пользователь вводит контактные данные, такие как номер телефона и email.  
+Особенности:
+  - Валидирует email и телефон по стандартным регулярным выражениям, т.к. в разметке типы значений для полей ввода не заданы.
 
 #### Класс ModalFullview
 
-Расширяет Modal, предназначен для показа карточки товара в модальном окне.
+Предназначен для показа карточки товара в модальном окне.
 
 Поля:
   - cardButton - кнопка добавления товара в корзину.
 
 Методы:
-  - open(data: {image: string, description: string, category: string, price: number, title: string}): void - расширение родительского метода, отображает карточку в модальном окне.
-  - close(): void - расширяет родительский метод, очищает содержимое и закрывает модалку.
+  - open(data: ICard): void - отображает карточку в модальном окне.
+  - close(): void - очищает содержимое и закрывает модалку.
 
 #### Класс ModalSuccess
 
-Расширяет Modal. Показывает сообщение об успешном заказе и очищает корзину.
+Показывает сообщение об успешном заказе и очищает корзину.
 
 Поля:
   - successDescription: HTMLTextElement - элемент разметки с уведомлением об успешном заказе. Показывает итоговую стоимость товаров из корзины.
@@ -271,15 +353,6 @@ type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'descripti
   - addCard(cardElement: HTMLElement): void — добавляет карточку в контейнер.
   - set container(cards: HTMLElement[]): void — полностью обновляет содержимое корзины.
 
-#### Класс UserInfo
-
-Собирает пользовательские данные из формы.
-
-Поля:
-  - Элементы формы: инпуты, кнопки и пр.
-
-Методы:
-  - Методы для извлечения и передачи данных формы.
 
 ### Слой коммуникации
 
@@ -300,10 +373,10 @@ type TCardFull = Pick<ICard, '_id' | 'title' | 'price' | 'category' | 'descripti
   - `user:changed` - обновление пользовательских данных.
 
 *Генерируются представлением:*
-  - `userPayment:open` - открытие формы оплаты и адреса.
-  - `userContacts:open` - открытие формы контактов.
-  - `success:open` - показ окна с подтверждением заказа.
-  - `basket:open` - открытие корзины.
+  - `userPayment:open` - открытие модального окна формы оплаты и адреса.
+  - `userContacts:open` - открытие модального окна контактов.
+  - `success:open` - показ модального окна с подтверждением заказа.
+  - `basket:open` - открытие модального окна корзины.
   - `card:select` - выбор карточки для показа.
   - `card:delete` - удаление карточки из корзины.
   - `edit-payment:input` - изменение данных формы оплаты и адреса.
