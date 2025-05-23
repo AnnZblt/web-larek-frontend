@@ -1,77 +1,94 @@
 // Тип категории
-type Category = 'другое' | 'хард-скил' | 'кнопка' | 'дополнительное' | 'софт-скил';
+export type Category = 'другое' | 'хард-скил' | 'кнопка' | 'дополнительное' | 'софт-скил';
 
-// Тип оплаты
-type PaymentMethod = 'online' | 'cash';
-
-// Данные карточки с апи
-interface ICardBase {
+// Данные товара с апи, которые потом используются в карточке
+// Сделали описание опциональным, чтобы не дублировать Pick 
+export interface IGood {
   _id: string;
   title: string;
   price: number;
   category: Category;
-  description: string;
+  description?: string;
   image: string;
 }
 
-// Модификаторы для отображения разных видов карточки
-interface ICard extends ICardBase {
-  isCompact?: boolean;
-  isFull?: boolean;
+// Товар для корзины
+export type TGoodCompact = Pick<IGood, '_id' | 'title' | 'price'>;
+
+// Товар для фулвью
+export type TGoodFull = IGood;
+
+// Интерфейс для самой карточки
+export interface ICard {
+  category: string;
+  title: string;
+  image?: string;
+  price: number | null;
+  description?: string;
 }
 
-// Карточка для галереи
-type TCardGallery = Pick<ICardBase, '_id' | 'category' | 'title' | 'price' | 'image'>;
+// Данные приложения
+export interface IAppState {
+  catalog: IGood[];
+  basket: string[];
+  order: IOrder | null;
+}
 
-// Карточка для корзины
-type TCardCompact = Pick<ICardBase, '_id' | 'title' | 'price'>;
-
-// Карточка для фулвью
-type TCardFull = ICardBase & { 'isFull': true };
-
-// Данные пользователя
-interface IUser {
-  paymentMethod: PaymentMethod;
+// Форма со способом оплаты и адресом доставки
+export interface IOrderForm {
+  payment: string;
   address: string;
-  phoneNumber: string;
-  email: string;
 }
 
-// Корзина
-interface IBasket {
-  items: TCardCompact[];
-  totalPrice: number;
-}
-
-// Заказ
-interface IOrder {
-  payment: PaymentMethod;
+//Форма с данными пользователя
+export interface IContactsForm {
   email: string;
   phone: string;
-  address: string;
-  total: number;
+}
+
+//Сформированный заказ
+export interface IOrder extends IOrderForm, IContactsForm {
   items: string[];
+  total: number;
 }
 
-// Работа с карточками
-interface ICardsData {
-  cards: ICard[];
-  preview: string | null;
-  getCard(cardId: string): ICard;
+// Валидация ошибок
+export type FormErrors = Partial<Record<keyof IOrder, string>>;
+
+// Статус форм
+export interface IFormState {
+  valid: boolean;
+  errors: string[];
 }
 
-// Работа с корзиной
-interface IBasketData {
-  getBasket(): IBasket;
-  setBasket(card: ICard): void;
-  deleteBasket(cardId: string, payload?: () => void): void;
-  updateBasket(cards: TCardCompact[], payload?: () => void): void;
-  getTotalBasket(): number;
-  clearBasket(): void;
+// Cодержимое страницы с возможностью блокирования прокрутки
+export interface IPage {
+  catalog: HTMLElement[];
+  locked: boolean;
 }
 
-//Работа с пользователем
-interface IUserData {
-  setUserInfo(userData: IUser): void;
-  checkUserValidation(data: Record<keyof IUser, string>): boolean;
+// Содержимое модального окна 
+export interface IModalData {
+  content: HTMLElement;
+}
+
+// Изменяемые элементы корзины
+export interface IBasketView {
+  items: HTMLElement[];
+  total: number;
+}
+
+// Данные для отображения в окне успешной отправки заказа на сервер
+export interface ISuccess {
+  total: number;
+}
+
+// Отслеживание событие клика в окне Success 
+export interface ISuccessActions {
+  onClick: () => void;
+}
+
+// Интерфейс для отправки заказа на сервер
+export interface IOrderResult {
+  id: string;
 }

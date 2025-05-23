@@ -5,6 +5,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const { DefinePlugin } = require('webpack');
 const TerserPlugin = require("terser-webpack-plugin");
+const Dotenv = require('dotenv-webpack');
 
 require('dotenv').config({
   path: path.join(process.cwd(), process.env.NODE_ENV ? `.env.${process.env.NODE_ENV}` : '.env')
@@ -19,6 +20,7 @@ const config = {
   devtool: "source-map",
   output: {
     path: path.resolve(__dirname, "dist"),
+    filename: "main.js",
   },
   devServer: {
     open: true,
@@ -27,6 +29,7 @@ const config = {
     hot: true
   },
   plugins: [
+    new Dotenv(),
     new HtmlWebpackPlugin({
       template: "src/pages/index.html"
     }),
